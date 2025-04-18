@@ -8,8 +8,9 @@ from dotenv import load_dotenv
 
 class ICICIBreezeAPI:
     def __init__(self):
-        self.base_url = "https://api.icicidirect.com/apibroker"
+        self.base_url = "https://api.icicidirect.com/breezeapi/api/v1/"
         self.api_key = os.getenv("ICICI_API_KEY")
+        self.appkey = os.getenv("ICICI_APP_KEY")
         self.api_secret = os.getenv("ICICI_API_SECRET")
         self.session_token = None
         
@@ -17,64 +18,28 @@ class ICICIBreezeAPI:
         """
         Login to ICICI Breeze API and get session token
         """
-        url = f"{self.base_url}/auth/login"
+        url = f"{self.base_url}customerdetails"
         
-        headers = {
-            "Content-Type": "application/json",
-            "X-API-KEY": self.api_key
+        
+        customerDetail_payload = json.dumps({
+                    "SessionToken": session_key,
+                    "AppKey": appkey
+                    })
+
+        customerDetail_headers = {
+            'Content-Type': 'application/json',
         }
-        
-        payload = {
-            "userId": user_id,
-            "password": password
-        }
-        
+
         try:
-            response = requests.post(url, headers=headers, json=payload)
-            response.raise_for_status()
-            data = response.json()
-            self.session_token = data.get("sessionToken")
+            customerDetail_response = requests.request("GET", customerDetail_url, headers=customerDetail_headers, data=customerDetail_payload)
+            data = json.loads(customerDetail_response.text)
+            self.session_token = data["Success"]["session_token"]
             return True
         except requests.exceptions.RequestException as e:
             print(f"Login failed: {e}")
             return False
     
-    def get_stock_quote(self, exchange, stock_code):
-        """
-        Get real-time stock quotes
-        
-        Parameters:
-        -----------
-        exchange : str
-            Exchange code (NSE, BSE)
-        stock_code : str
-            Stock symbol/code
-        """
-        if not self.session_token:
-            print("Please login first")
-            return None
-            
-        url = f"{self.base_url}/quotes/v1/quote"
-        
-        headers = {
-            "Content-Type": "application/json",
-            "X-API-KEY": self.api_key,
-            "X-SESSION-TOKEN": self.session_token
-        }
-        
-        params = {
-            "exchange": exchange,
-            "stock_code": stock_code
-        }
-        
-        try:
-            response = requests.get(url, headers=headers, params=params)
-            response.raise_for_status()
-            return response.json()
-        except requests.exceptions.RequestException as e:
-            print(f"Failed to get stock quote: {e}")
-            return None
-    
+     
     def get_historical_data(self, exchange, stock_code, from_date, to_date, interval="1d"):
         """
         Get historical price data
@@ -92,28 +57,36 @@ class ICICIBreezeAPI:
         interval : str
             Time interval (1d, 1h, 15m, etc.)
         """
+        time_stamp = datetime.now(timezone.utc).isoformat()[:19] + '.000Z'
+
         if not self.session_token:
             print("Please login first")
             return None
             
-        url = f"{self.base_url}/historical/v1/historical"
+        url = f"{self.base_url}historicalcharts"
         
-        headers = {
-            "Content-Type": "application/json",
-            "X-API-KEY": self.api_key,
-            "X-SESSION-TOKEN": self.session_token
-        }
+             
         
-        params = {
-            "exchange": exchange,
+        payload = json.dumps({
+            "interval": interval,
+            "from_date": "2025-02-03T09:20:00.000Z",
+            "to_date": "2025-02-03T09:20:00.000Z",
             "stock_code": stock_code,
-            "from_date": from_date,
-            "to_date": to_date,
-            "interval": interval
-        }
+            "exchange_code": exchange,
+            "product_type": "Cash"
+        }, separators=(',', ':'))
         
+        checksum = hashlib.sha256((time_stamp+payload+secret_key).encode("utf-8")).hexdigest()
+
+        headers = {
+           'Content-Type': 'application/json',
+            'X-Checksum': 'token '+ checksum,
+            'X-Timestamp': time_stamp,
+            'X-AppKey': self.appkey,
+            'X-SessionToken': self.session_token
+        }
         try:
-            response = requests.get(url, headers=headers, params=params)
+            response = requests.request("GET", url, headers=headers, data=payload)
             response.raise_for_status()
             data = response.json()
             
@@ -124,6 +97,18 @@ class ICICIBreezeAPI:
             return None
         except requests.exceptions.RequestException as e:
             print(f"Failed to get historical data: {e}")
+            return None
+        
+        
+    def get_data(self, exchange, stock_code, from_date, to_date, interval="1d"):
+        """
+        Get historical data and return as pandas DataFrame
+        """
+        df = self.get_historical_data(exchange, stock_code, from_date, to_date, interval)
+        if df is not None:
+            return df
+        else:
+            print("No data found")
             return None
 
 # Example usage
