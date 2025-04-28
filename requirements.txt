@@ -5,3 +5,10 @@ pandas==2.0.3
 matplotlib==3.7.2
 breeze-connect==1.0.62
 ta
+plotly==5.14.1
+kaleido==0.2.1
+flask==2.3.3
+tqdm
+scikit-learn
+keras==2.15.0
+tensorflow==2.15.0

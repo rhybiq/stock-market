@@ -172,3 +172,8 @@ cython_debug/
 
 # PyPI configuration file
 .pypirc
+*stock_data/*
+stock_data/*
+models/*
+models/*
+*.h5
